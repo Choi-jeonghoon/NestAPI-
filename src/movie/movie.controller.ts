@@ -27,7 +27,7 @@ export class MovieController {
     return this.movieService.getMovieById(+id);
   }
 
-  @Post('')
+  @Post()
   postMovie(@Body() body: CreateMovieDto) {
     return this.movieService.createMovie(body);
   }
