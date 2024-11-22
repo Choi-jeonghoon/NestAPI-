@@ -5,14 +5,19 @@ import { Movie } from './entity/movie.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Like, Repository } from 'typeorm';
 import { MovieDetail } from './entity/movie-detail.entity';
+import { Director } from 'src/director/entity/director.entity';
 
 @Injectable()
 export class MovieService {
   constructor(
     @InjectRepository(Movie)
     private readonly movieRepository: Repository<Movie>,
+
     @InjectRepository(MovieDetail)
     private readonly movieDeatailRepository: Repository<MovieDetail>,
+
+    @InjectRepository(Director)
+    private readonly directorRepository: Repository<MovieDetail>,
   ) {}
 
   async findAll(title?: string) {
@@ -56,11 +61,23 @@ export class MovieService {
     }
     return movie;
   }
+
   async create(createMovieDto: CreateMovieDto) {
+    const director = await this.directorRepository.findOne({
+      where: {
+        id: createMovieDto.directorId,
+      },
+    });
+
+    if (!director) {
+      throw new NotFoundException('존재하지 않는 ID의 감독입니다.');
+    }
+
     const movie = await this.movieRepository.save({
       title: createMovieDto.title,
       genre: createMovieDto.genre,
       detail: { detail: createMovieDto.detail },
+      director,
     });
 
     return movie;
@@ -69,7 +86,7 @@ export class MovieService {
   async update(id: number, updateMovieDto: UpdateMovieDto) {
     const movie = await this.movieRepository.findOne({
       where: { id },
-      relations: ['detail'],
+      relations: ['detail', 'director'],
     });
     console.log(movie);
 
@@ -77,9 +94,33 @@ export class MovieService {
       throw new NotFoundException('존재하지 않는 영화입니다.');
     }
 
-    const { detail, ...movieRest } = updateMovieDto;
+    let newDirector;
 
-    await this.movieRepository.update({ id }, movieRest);
+    const { detail, directorId, ...movieRest } = updateMovieDto;
+
+    //값을 입력했을때
+    if (directorId) {
+      const director = await this.directorRepository.findOne({
+        where: {
+          id: directorId, // 올바른 조건으로 수정
+        },
+      });
+
+      //값이 잘못되었을때
+      if (!director) {
+        throw new NotFoundException('존재하지 않는 감독의 id 입니다.!');
+      }
+
+      newDirector = director;
+    }
+
+    const movieUpdateFields = {
+      ...movieRest,
+      ...(newDirector && { director: newDirector }),
+    };
+
+    //영화 데이터 업데이트
+    await this.movieRepository.update({ id }, movieUpdateFields);
 
     // if (detail && movie.detail) {
     //   await this.movieDeatailRepository.update(
@@ -107,11 +148,12 @@ export class MovieService {
       }
     }
 
+    // 변경된 Movie 반환
     const newMovie = await this.movieRepository.findOne({
       where: { id },
-      relations: ['detail'],
+      relations: ['detail', 'director'],
     });
-    //console.log(movie);
+    console.log(newMovie);
     return newMovie;
   }
 

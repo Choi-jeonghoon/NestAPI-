@@ -6,7 +6,7 @@ import {
   OneToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { BaseTable } from '../../director/common/entity/base-table.entuty';
+import { BaseTable } from '../../common/entity/base-table.entuty';
 import { MovieDetail } from './movie-detail.entity';
 import { Director } from 'src/director/entity/director.entity';
 
@@ -40,7 +40,7 @@ export class Movie extends BaseTable {
   @JoinColumn()
   detail: MovieDetail;
 
-  @ManyToOne(() => Director, (director) => director.id)
+  @ManyToOne(() => Director, (director) => director.id, { cascade: true })
   director: Director;
 }
 /*
