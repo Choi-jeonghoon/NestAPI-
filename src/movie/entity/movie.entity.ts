@@ -28,7 +28,11 @@ export class Movie extends BaseTable {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  //QueryFailedError: duplicate key value violates unique constraint "UQ_a81090ad0ceb645f30f9399c347"
+  //유니크 제약을 넣어준상태로 조건을 준것이다. 제약을 벗어날려고하면 위와 같은 에러가 발생한다.
+  @Column({
+    unique: true,
+  })
   title: string;
 
   @Column()
@@ -36,11 +40,15 @@ export class Movie extends BaseTable {
 
   @OneToOne(() => MovieDetail, (movieDetail) => movieDetail.id, {
     cascade: true,
+    nullable: false, // null 변경을 막기위함
   })
   @JoinColumn()
   detail: MovieDetail;
 
-  @ManyToOne(() => Director, (director) => director.id, { cascade: true })
+  @ManyToOne(() => Director, (director) => director.id, {
+    cascade: true,
+    nullable: false, // null 변경을 막기위함
+  })
   director: Director;
 }
 /*
