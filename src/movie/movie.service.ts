@@ -23,7 +23,7 @@ export class MovieService {
   async findAll(title?: string) {
     if (!title) {
       const [movies, count] = await Promise.all([
-        this.movieRepository.find(), // 전체 영화 데이터
+        this.movieRepository.find({ relations: ['director'] }), // 전체 영화 데이터
         this.movieRepository.count(), // 전체 영화 개수
       ]);
       return { movies, count };
@@ -32,6 +32,7 @@ export class MovieService {
       where: {
         title: Like(`%${title}%`),
       },
+      relations: ['director'],
     });
     return { movies, count };
   }
@@ -53,7 +54,7 @@ export class MovieService {
       where: {
         id,
       },
-      relations: ['detail'],
+      relations: ['detail', 'director'],
     });
     if (!movie) {
       //throw new Error('존재하지 않는 ID');
