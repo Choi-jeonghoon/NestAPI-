@@ -7,6 +7,8 @@ import { Movie } from './movie/entity/movie.entity';
 import { MovieDetail } from './movie/entity/movie-detail.entity';
 import { DirectorModule } from './director/director.module';
 import { Director } from './director/entity/director.entity';
+import { GenreModule } from './genre/genre.module';
+import { Genre } from './genre/entity/genre.entity';
 
 @Module({
   imports: [
@@ -31,13 +33,14 @@ import { Director } from './director/entity/director.entity';
         username: configService.get<string>('DB_USERNAME'), // 사용자 이름을 동적으로 가져옴
         password: configService.get<string>('DB_PASSWORD'), // 비밀번호를 동적으로 가져옴
         database: configService.get<string>('DB_DATABASE'), // 사용할 데이터베이스 이름을 동적으로 가져옴
-        entities: [Movie, MovieDetail, Director], // 사용할 엔티티 리스트
+        entities: [Movie, MovieDetail, Director, Genre], // 사용할 엔티티 리스트
         synchronize: true, // 개발 환경에서는 true로 설정하여 엔티티와 DB 스키마를 자동으로 동기화
       }),
       inject: [ConfigService], // ConfigService를 주입받아 설정을 가져옴
     }),
     MovieModule,
-    DirectorModule, // MovieModule을 애플리케이션에 등록
+    DirectorModule,
+    GenreModule, // MovieModule을 애플리케이션에 등록
   ],
 })
 export class AppModule {}

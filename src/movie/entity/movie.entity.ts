@@ -2,6 +2,8 @@ import {
   Column,
   Entity,
   JoinColumn,
+  JoinTable,
+  ManyToMany,
   ManyToOne,
   OneToOne,
   PrimaryGeneratedColumn,
@@ -9,10 +11,11 @@ import {
 import { BaseTable } from '../../common/entity/base-table.entuty';
 import { MovieDetail } from './movie-detail.entity';
 import { Director } from 'src/director/entity/director.entity';
+import { Genre } from 'src/genre/entity/genre.entity';
 
-//ManyToOne Director -> 감독은 여러개의 영화를 만들수 있음
-//OneToOne MovieDetail -> 영화는 하나의 상세 내용을 갖을 수 있음
-//ManyToMany genre-> 영화는 여러개의 장르를 갖을수 있으면 장라는 여러개의 영화에 속할수 있음
+// ManyToOne Director -> 감독은 여러개의 영화를 만들수 있음
+// OneToOne MovieDetail -> 영화는 하나의 상세 내용을 갖을 수 있음
+// ManyToMany genre-> 영화는 여러개의 장르를 갖을수 있으면 장라는 여러개의 영화에 속할수 있음
 
 @Entity()
 //아래는 코드는 상속 받아 처리는 것이다
@@ -29,14 +32,15 @@ export class Movie extends BaseTable {
   id: number;
 
   //QueryFailedError: duplicate key value violates unique constraint "UQ_a81090ad0ceb645f30f9399c347"
-  //유니크 제약을 넣어준상태로 조건을 준것이다. 제약을 벗어날려고하면 위와 같은 에러가 발생한다.
+  //유니크 제약을 넣어준상태로 조건을 준것이다. 제약을 벗어날려고하면 위와같은 에러가 발생
   @Column({
     unique: true,
   })
   title: string;
 
-  @Column()
-  genre: string;
+  @ManyToMany(() => Genre, (genre) => genre.movies)
+  @JoinTable()
+  genres: Genre[];
 
   @OneToOne(() => MovieDetail, (movieDetail) => movieDetail.id, {
     cascade: true,
@@ -51,8 +55,7 @@ export class Movie extends BaseTable {
   })
   director: Director;
 }
-/*
-결과 반환되는 모습
+/*결과 반환되는 모습
 
 [
     [
