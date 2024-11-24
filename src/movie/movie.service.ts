@@ -27,7 +27,7 @@ export class MovieService {
   async findAll(title?: string) {
     if (!title) {
       const [movies, count] = await Promise.all([
-        this.movieRepository.find({ relations: ['director'] }), // 전체 영화 데이터
+        this.movieRepository.find({ relations: ['director', 'genres'] }), // 전체 영화 데이터
         this.movieRepository.count(), // 전체 영화 개수
       ]);
       return { movies, count };
@@ -36,7 +36,7 @@ export class MovieService {
       where: {
         title: Like(`%${title}%`),
       },
-      relations: ['director'],
+      relations: ['director', 'genres'],
     });
     return { movies, count };
   }
@@ -58,7 +58,7 @@ export class MovieService {
       where: {
         id,
       },
-      relations: ['detail', 'director'],
+      relations: ['detail', 'director', 'genres'],
     });
     if (!movie) {
       //throw new Error('존재하지 않는 ID');
@@ -104,7 +104,7 @@ export class MovieService {
   async update(id: number, updateMovieDto: UpdateMovieDto) {
     const movie = await this.movieRepository.findOne({
       where: { id },
-      relations: ['detail', 'director'],
+      relations: ['detail', 'director', 'genres'],
     });
     console.log(movie);
 
@@ -114,7 +114,7 @@ export class MovieService {
 
     let newDirector;
 
-    const { detail, directorId, ...movieRest } = updateMovieDto;
+    const { detail, directorId, genreIds, ...movieRest } = updateMovieDto;
 
     //값을 입력했을때
     if (directorId) {
@@ -132,6 +132,21 @@ export class MovieService {
       newDirector = director;
     }
 
+    let newGenres;
+
+    if (genreIds) {
+      const genres = await this.genreRepository.find({
+        where: { id: In(genreIds) },
+      });
+      if (genres.length !== updateMovieDto.genreIds.length) {
+        throw new NotFoundException(
+          '존재하지 않는 장르가 있습니다 존재하는 ids-> ${genres.map(genre=>genre.id).join(',
+          ')}',
+        );
+      }
+      newGenres = genres;
+    }
+
     const movieUpdateFields = {
       ...movieRest,
       ...(newDirector && { director: newDirector }),
@@ -140,12 +155,13 @@ export class MovieService {
     //영화 데이터 업데이트
     await this.movieRepository.update({ id }, movieUpdateFields);
 
-    // if (detail && movie.detail) {
-    //   await this.movieDeatailRepository.update(
-    //     { id: movie.detail.id },
-    //     { detail },
-    //   );
-    // }
+    /* 
+      if (detail && movie.detail) {
+       await this.movieDeatailRepository.update(
+         { id: movie.detail.id },
+         { detail },
+       );
+    */
 
     /*
     @Memo  detail의 값이 처음 null 일때 문제가 발생한다. 아래와같이 로직 을 추가해줘 해결한다.
@@ -171,8 +187,17 @@ export class MovieService {
       where: { id },
       relations: ['detail', 'director'],
     });
-    console.log(newMovie);
-    return newMovie;
+    console.log('2', newMovie);
+
+    newMovie.genres = newGenres;
+
+    await this.movieRepository.save(newMovie);
+
+    // return this.movieRepository.preload(newMovie);
+    return this.movieRepository.findOne({
+      where: { id },
+      relations: ['detail', 'director', 'genres'],
+    });
   }
 
   async remove(id: number) {
