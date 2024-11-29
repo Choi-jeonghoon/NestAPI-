@@ -3,7 +3,7 @@ import { CreateMovieDto } from './dto/create-movie.dto';
 import { UpdateMovieDto } from './dto/update-movie.dto';
 import { Movie } from './entity/movie.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { MovieDetail } from './entity/movie-detail.entity';
 import { Director } from 'src/director/entity/director.entity';
 import { Genre } from 'src/genre/entity/genre.entity';
@@ -22,6 +22,7 @@ export class MovieService {
 
     @InjectRepository(Genre)
     private readonly genreRepository: Repository<Genre>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async findAll(title?: string) {
@@ -88,75 +89,91 @@ export class MovieService {
   }
 
   async create(createMovieDto: CreateMovieDto) {
-    const director = await this.directorRepository.findOne({
-      where: {
-        id: createMovieDto.directorId,
-      },
-    });
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const director = await qr.manager.findOne(Director, {
+        where: {
+          id: createMovieDto.directorId,
+        },
+      });
 
-    if (!director) {
-      throw new NotFoundException('존재하지 않는 ID의 감독입니다.');
+      if (!director) {
+        throw new NotFoundException('존재하지 않는 ID의 감독입니다.');
+      }
+
+      const genres = await qr.manager.find(Genre, {
+        where: {
+          id: In(createMovieDto.genreIds), //In은 배열 형태의 조건을 효율적으로 처리 list 넣은 값들을 다 찾기위해
+        },
+      });
+
+      if (genres.length !== createMovieDto.genreIds.length) {
+        throw new NotFoundException(
+          '존재하지 않는 장르가 있습니다 존재하는 ids-> ${genres.map(genre=>genre.id).join(',
+          ')}',
+        );
+      }
+      //쿼리 빌더로 하는경우
+      //save 하는 작업을 쿼리빌더로 작업해야될경우에는 아래와같이   detail: { id: movieDetailId }, 직접 연결을 시켜줘야되는 단점이 있다.
+      //동시에 같이 생성하는 것이 안된다.
+      const movieDetail = await qr.manager
+        .createQueryBuilder()
+        .insert()
+        .into(MovieDetail)
+        .values({
+          detail: createMovieDto.detail,
+        })
+        .execute();
+
+      // 트랜젝션 적용 하고 나서 검증하기위한 에러 던져서 확인
+      //throw new NotFoundException('에러');
+
+      const movieDetailId = movieDetail.identifiers[0].id;
+
+      const movie = await qr.manager
+        .createQueryBuilder()
+        .insert()
+        .into(Movie)
+        .values({
+          title: createMovieDto.title,
+          detail: { id: movieDetailId },
+          director,
+          //genres (ManyToMany) 안되기때문에 아래와같이 다시 장르를 직접 생성해줘야된다.
+        })
+        .execute();
+
+      const movieId = movie.identifiers[0].id;
+      await qr.manager
+        .createQueryBuilder()
+        .relation(Movie, 'genres')
+        .of(movieId)
+        .add(genres.map((genre) => genre.id));
+
+      // const movie = await this.movieRepository.save({
+      //   title: createMovieDto.title,
+      //   detail: { detail: createMovieDto.detail },
+      //   director,
+      //   genres,
+      // });
+
+      // return movie;
+
+      await qr.commitTransaction();
+
+      return this.movieRepository.find({
+        where: {
+          id: movieId,
+        },
+        relations: ['detail', 'director', 'genres'],
+      });
+    } catch (e) {
+      await qr.rollbackTransaction();
+      throw e;
+    } finally {
+      await qr.release();
     }
-
-    const genres = await this.genreRepository.find({
-      where: {
-        id: In(createMovieDto.genreIds), //In은 배열 형태의 조건을 효율적으로 처리 list 넣은 값들을 다 찾기위해
-      },
-    });
-
-    if (genres.length !== createMovieDto.genreIds.length) {
-      throw new NotFoundException(
-        '존재하지 않는 장르가 있습니다 존재하는 ids-> ${genres.map(genre=>genre.id).join(',
-        ')}',
-      );
-    }
-    //쿼리 빌더로 하는경우
-    //save 하는 작업을 쿼리빌더로 작업해야될경우에는 아래와같이   detail: { id: movieDetailId }, 직접 연결을 시켜줘야되는 단점이 있다.
-    //동시에 같이 생성하는 것이 안된다.
-    const movieDetail = await this.movieDeatailRepository
-      .createQueryBuilder()
-      .insert()
-      .into(MovieDetail)
-      .values({
-        detail: createMovieDto.detail,
-      })
-      .execute();
-
-    const movieDetailId = movieDetail.identifiers[0].id;
-
-    const movie = await this.movieRepository
-      .createQueryBuilder()
-      .insert()
-      .into(Movie)
-      .values({
-        title: createMovieDto.title,
-        detail: { id: movieDetailId },
-        director,
-        //genres (ManyToMany) 안되기때문에 아래와같이 다시 장르를 직접 생성해줘야된다.
-      })
-      .execute();
-
-    const movieId = movie.identifiers[0].id;
-    await this.movieRepository
-      .createQueryBuilder()
-      .relation(Movie, 'genres')
-      .of(movieId)
-      .add(genres.map((genre) => genre.id));
-
-    // const movie = await this.movieRepository.save({
-    //   title: createMovieDto.title,
-    //   detail: { detail: createMovieDto.detail },
-    //   director,
-    //   genres,
-    // });
-
-    // return movie;
-    return this.movieRepository.find({
-      where: {
-        id: movieId,
-      },
-      relations: ['detail', 'director', 'genres'],
-    });
   }
 
   async update(id: number, updateMovieDto: UpdateMovieDto) {
@@ -300,7 +317,6 @@ export class MovieService {
       throw new NotFoundException('존재하지 않는 영화입니다.');
     }
 
-    //쿼리 빌더로 하는경우( 영화 삭제 )
     //쿼리 빌더로 하는경우( 영화 삭제 )
     await this.movieRepository
       .createQueryBuilder()
