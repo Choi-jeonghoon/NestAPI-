@@ -7,6 +7,7 @@ import { DataSource, In, Repository } from 'typeorm';
 import { MovieDetail } from './entity/movie-detail.entity';
 import { Director } from 'src/director/entity/director.entity';
 import { Genre } from 'src/genre/entity/genre.entity';
+import { release } from 'os';
 
 @Injectable()
 export class MovieService {
@@ -177,129 +178,148 @@ export class MovieService {
   }
 
   async update(id: number, updateMovieDto: UpdateMovieDto) {
-    const movie = await this.movieRepository.findOne({
-      where: { id },
-      relations: ['detail', 'genres'],
-    });
-
-    if (!movie) {
-      throw new NotFoundException('존재하지 않는 영화입니다.');
-    }
-
-    let newDirector;
-
-    const { detail, directorId, genreIds, ...movieRest } = updateMovieDto;
-
-    //값을 입력했을때
-    if (directorId) {
-      const director = await this.directorRepository.findOne({
-        where: {
-          id: directorId, // 올바른 조건으로 수정
-        },
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const movie = await qr.manager.findOne(Movie, {
+        where: { id },
+        relations: ['detail', 'genres'],
       });
 
-      //값이 잘못되었을때
-      if (!director) {
-        throw new NotFoundException('존재하지 않는 감독의 id 입니다.!');
+      if (!movie) {
+        throw new NotFoundException('존재하지 않는 영화입니다.');
       }
 
-      newDirector = director;
-    }
+      let newDirector;
 
-    let newGenres;
+      const { detail, directorId, genreIds, ...movieRest } = updateMovieDto;
 
-    if (genreIds) {
-      const genres = await this.genreRepository.find({
-        where: { id: In(genreIds) },
-      });
-      if (genres.length !== updateMovieDto.genreIds.length) {
-        throw new NotFoundException(
-          '존재하지 않는 장르가 있습니다 존재하는 ids-> ${genres.map(genre=>genre.id).join(',
-          ')}',
-        );
+      //값을 입력했을때
+      if (directorId) {
+        const director = await qr.manager.findOne(Director, {
+          where: {
+            id: directorId, // 올바른 조건으로 수정
+          },
+        });
+
+        //값이 잘못되었을때
+        if (!director) {
+          throw new NotFoundException('존재하지 않는 감독의 id 입니다.!');
+        }
+
+        newDirector = director;
       }
-      newGenres = genres;
-    }
 
-    const movieUpdateFields = {
-      ...movieRest,
-      ...(newDirector && { director: newDirector }),
-    };
+      let newGenres;
 
-    //영화 데이터 업데이트
-    //await this.movieRepository.update({ id }, movieUpdateFields);
-
-    //쿼리 빌더로 하는경우
-    await this.movieRepository
-      .createQueryBuilder()
-      .update(movie)
-      .set(movieUpdateFields)
-      .where('id = :id', { id })
-      .execute();
-
-    /* 
-      if (detail && movie.detail) {
-       await this.movieDeatailRepository.update(
-         { id: movie.detail.id },
-         { detail },
-       );
-    */
-
-    /*
-    @Memo  detail의 값이 처음 null 일때 문제가 발생한다. 아래와같이 로직 을 추가해줘 해결한다.
-    */
-    if (detail) {
-      if (movie.detail) {
-        //쿼리 빌더로 하는경우
-        await this.movieDeatailRepository
-          .createQueryBuilder()
-          .update(MovieDetail)
-          .set({ detail })
-          .where('id = :id', { id: movie.detail.id })
-          .execute();
-
-        // 기존의 detail 값이 존재하면 update 실행
-        // await this.movieDeatailRepository.update(
-        //   { id: movie.detail.id },
-        //   { detail },
-        // );
-      } else {
-        // detail이 null일 경우 새로 생성 및 저장
-        const newDetail = this.movieDeatailRepository.create({ detail, movie });
-        await this.movieDeatailRepository.save(newDetail);
-        movie.detail = newDetail; // 관계 반영
-        await this.movieRepository.save(movie);
+      if (genreIds) {
+        const genres = await qr.manager.find(Genre, {
+          where: { id: In(genreIds) },
+        });
+        if (genres.length !== updateMovieDto.genreIds.length) {
+          throw new NotFoundException(
+            '존재하지 않는 장르가 있습니다 존재하는 ids-> ${genres.map(genre=>genre.id).join(',
+            ')}',
+          );
+        }
+        newGenres = genres;
       }
-    }
 
-    //쿼리 빌더로 하는경우( 장르 추가 )
-    if (newGenres) {
-      await this.movieRepository
+      const movieUpdateFields = {
+        ...movieRest,
+        ...(newDirector && { director: newDirector }),
+      };
+
+      //영화 데이터 업데이트
+      //await this.movieRepository.update({ id }, movieUpdateFields);
+
+      //쿼리 빌더로 하는경우
+      await qr.manager
         .createQueryBuilder()
-        .relation(Movie, 'genres')
-        .of(id)
-        .addAndRemove(
-          newGenres.map((genre) => genre.id),
-          movie.genres.map((genre) => genre.id),
-        );
+        .update(Movie) //엔티티 클래스를 전달해야 된다...
+        .set(movieUpdateFields)
+        .where('id = :id', { id })
+        .execute();
+
+      //일부러 에러 던져서 트랜젝션 테스트 진행
+      // throw new NotFoundException();
+
+      /* 
+        if (detail && movie.detail) {
+         await this.movieDeatailRepository.update(
+           { id: movie.detail.id },
+           { detail },
+         );
+      */
+
+      /*
+      @Memo  detail의 값이 처음 null 일때 문제가 발생한다. 아래와같이 로직 을 추가해줘 해결한다.
+      */
+      if (detail) {
+        if (movie.detail) {
+          //쿼리 빌더로 하는경우
+          await qr.manager
+            .createQueryBuilder()
+            .update(MovieDetail)
+            .set({ detail })
+            .where('id = :id', { id: movie.detail.id })
+            .execute();
+
+          // 기존의 detail 값이 존재하면 update 실행
+          // await this.movieDeatailRepository.update(
+          //   { id: movie.detail.id },
+          //   { detail },
+          // );
+        } else {
+          // detail이 null일 경우 새로 생성 및 저장
+          const newDetail = qr.manager.create(MovieDetail, {
+            detail,
+            movie,
+          });
+          await qr.manager.save(newDetail);
+          movie.detail = newDetail; // 관계 반영
+          await qr.manager.save(movie);
+        }
+      }
+
+      //쿼리 빌더로 하는경우( 장르 추가 )
+      if (newGenres) {
+        await qr.manager
+          .createQueryBuilder()
+          .relation(Movie, 'genres')
+          .of(id)
+          .addAndRemove(
+            newGenres.map((genre) => genre.id),
+            movie.genres.map((genre) => genre.id),
+          );
+      }
+
+      // 변경된 Movie 반환
+      // const newMovie = await this.movieRepository.findOne({
+      //   where: { id },
+      //   relations: ['detail', 'director'],
+      // });
+
+      // newMovie.genres = newGenres;
+
+      // await this.movieRepository.save(newMovie);
+
+      // return this.movieRepository.preload(newMovie);
+
+      await qr.commitTransaction();
+
+      return this.movieRepository.findOne({
+        where: { id },
+        relations: ['detail', 'director', 'genres'],
+      });
+    } catch (e) {
+      await qr.rollbackTransaction();
+      console.error(e); // 예외 로그 출력
+      throw new NotFoundException('에러');
+    } finally {
+      await qr.release();
     }
-
-    // 변경된 Movie 반환
-    // const newMovie = await this.movieRepository.findOne({
-    //   where: { id },
-    //   relations: ['detail', 'director'],
-    // });
-
-    // newMovie.genres = newGenres;
-
-    // await this.movieRepository.save(newMovie);
-
-    // return this.movieRepository.preload(newMovie);
-
-    return this.movieRepository.findOne({
-      where: { id },
-      relations: ['detail', 'director', 'genres'],
-    });
   }
 
   async remove(id: number) {
