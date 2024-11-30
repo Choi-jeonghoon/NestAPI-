@@ -15,6 +15,7 @@ import {
 import { MovieService } from './movie.service';
 import { CreateMovieDto } from './dto/create-movie.dto';
 import { UpdateMovieDto } from './dto/update-movie.dto';
+import { MovieTitleValidationPipe } from './pipe/movie-title-validation.pipe';
 
 @Controller('movie')
 @UseInterceptors(ClassSerializerInterceptor)
@@ -22,7 +23,7 @@ export class MovieController {
   constructor(private readonly movieService: MovieService) {}
 
   @Get()
-  getMoives(@Query('title') title?: string) {
+  getMoives(@Query('title', MovieTitleValidationPipe) title?: string) {
     // 타입을 검증할때는 여기 컨트롤러파일에서 진행한다.
     return this.movieService.findAll(title);
   }
