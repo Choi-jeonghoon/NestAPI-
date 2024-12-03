@@ -9,6 +9,7 @@ import { DirectorModule } from './director/director.module';
 import { Director } from './director/entity/director.entity';
 import { GenreModule } from './genre/genre.module';
 import { Genre } from './genre/entity/genre.entity';
+import { envVariablekeys } from './common/const/env.const';
 
 @Module({
   imports: [
@@ -21,18 +22,19 @@ import { Genre } from './genre/entity/genre.entity';
         DB_PORT: Joi.number().required(), // DB 포트는 숫자여야 하며 필수값이다.
         DB_USERNAME: Joi.string().required(), // DB 사용자 이름은 필수값이다.
         DB_PASSWORD: Joi.string().required(), // DB 비밀번호는 필수값이다.
+        DB_DATABASE: Joi.string().required(),
       }),
     }),
     // TypeOrmModule.forRootAsync를 사용하는 이유는 ConfigService와 같은 비동기 서비스로부터 설정을 동적으로 가져오기 위함이다.
     TypeOrmModule.forRootAsync({
       // useFactory는 ConfigService를 통해 동적으로 DB 설정을 가져오기 위한 함수이다.
       useFactory: (configService: ConfigService) => ({
-        type: configService.get<string>('DB_TYPE') as 'postgres', // 데이터베이스 타입을 동적으로 가져옴
-        host: configService.get<string>('DB_HOST'), // 호스트명을 동적으로 가져옴
-        port: configService.get<number>('DB_PORT'), // 포트 번호를 동적으로 가져옴
-        username: configService.get<string>('DB_USERNAME'), // 사용자 이름을 동적으로 가져옴
-        password: configService.get<string>('DB_PASSWORD'), // 비밀번호를 동적으로 가져옴
-        database: configService.get<string>('DB_DATABASE'), // 사용할 데이터베이스 이름을 동적으로 가져옴
+        type: configService.get<string>(envVariablekeys.dbType) as 'postgres', // 데이터베이스 타입을 동적으로 가져옴
+        host: configService.get<string>(envVariablekeys.dbHost), // 호스트명을 동적으로 가져옴
+        port: configService.get<number>(envVariablekeys.dbPort), // 포트 번호를 동적으로 가져옴
+        username: configService.get<string>(envVariablekeys.dbUsername), // 사용자 이름을 동적으로 가져옴
+        password: configService.get<string>(envVariablekeys.dbPassword), // 비밀번호를 동적으로 가져옴
+        database: configService.get<string>(envVariablekeys.dbDatabase), // 사용할 데이터베이스 이름을 동적으로 가져옴
         entities: [Movie, MovieDetail, Director, Genre], // 사용할 엔티티 리스트
         synchronize: true, // 개발 환경에서는 true로 설정하여 엔티티와 DB 스키마를 자동으로 동기화
       }),
